@@ -1,0 +1,24 @@
+[package]
+name = "dbs-fuse"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Alibaba Dragonball Team"]
+description = "Utilities for tokio/tokio-uring based async IO"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox"
+keywords = ["async", "tokio", "tokio-uring"]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+vm-memory = "0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio-uring = "0.3.0"
+
+[features]
+async-io = []
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
