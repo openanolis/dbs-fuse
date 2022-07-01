@@ -301,6 +301,7 @@ mod async_io {
     #[cfg(all(test, target_os = "linux"))]
     mod tests {
         use super::*;
+        use tokio_uring::buf::{IoBuf, IoBufMut};
 
         #[test]
         fn test_new_file_volatile_buf() {
