@@ -523,7 +523,7 @@ mod async_io {
             mut bufs: Vec<FileVolatileBuf>,
             mut offset: u64,
         ) -> (Result<usize>, Vec<FileVolatileBuf>) {
-            if bufs.len() == 0 {
+            if bufs.is_empty() {
                 return (Ok(0), bufs);
             } else if bufs.len() == 1 {
                 let (res, buf) = self.async_read_at_volatile(bufs[0], offset).await;
@@ -681,7 +681,7 @@ mod async_io {
             mut bufs: Vec<FileVolatileBuf>,
             mut offset: u64,
         ) -> (Result<usize>, Vec<FileVolatileBuf>) {
-            if bufs.len() == 0 {
+            if bufs.is_empty() {
                 return (Ok(0), bufs);
             } else if bufs.len() == 1 {
                 let (res, buf) = self.async_write_at_volatile(bufs[0], offset).await;
