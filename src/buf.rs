@@ -239,6 +239,10 @@ mod async_io {
 
     impl FileVolatileBuf {
         /// Create a [FileVolatileBuf] object from a buffer.
+        ///
+        /// # Safety
+        /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
+        /// the referenced buffer.
         pub unsafe fn new(buf: &mut [u8]) -> Self {
             Self {
                 addr: buf.as_mut_ptr() as usize,
@@ -248,6 +252,10 @@ mod async_io {
         }
 
         /// Create a [FileVolatileBuf] object from a raw pointer.
+        ///
+        /// # Safety
+        /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
+        /// the referenced buffer.
         pub unsafe fn from_raw(addr: *mut u8, size: usize, cap: usize) -> Self {
             Self {
                 addr: addr as usize,
