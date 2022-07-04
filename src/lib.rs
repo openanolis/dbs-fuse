@@ -20,6 +20,8 @@
 
 pub mod buf;
 pub mod file_traits;
+#[cfg(feature = "async-io")]
+pub mod mpmc;
 
 #[cfg(target_os = "linux")]
 pub use libc::{off64_t, pread64, preadv64, pwrite64, pwritev64};
