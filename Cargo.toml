@@ -14,16 +14,17 @@ edition = "2018"
 async-trait = { version = "0.1.56", optional = true }
 futures = { version = "0.3.21", optional = true }
 libc = "0.2.39"
+tokio = { version = "1", optional = true }
 vm-memory = "0.7"
 
 [dev-dependencies]
 vmm-sys-util = "0.9.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-tokio-uring = "0.3.0"
+tokio-uring = "0.3"
 
 [features]
-async-io = ["async-trait", "futures"]
+async-io = ["async-trait", "futures", "tokio/sync"]
 
 [package.metadata.docs.rs]
 all-features = true
