@@ -123,6 +123,19 @@ impl<'a> FileVolatileSlice<'a> {
         unsafe { VolatileSlice::new(self.as_ptr(), self.len()) }
     }
 
+    /// Borrow a [FileVolatileSlice] to temporarily elide the lifetime parameter.
+    ///
+    /// # Safety
+    /// The [FileVolatileSlice] is borrowed without a lifetime parameter, so the caller must
+    /// ensure that [FileVolatileBuf] doesn't out-live the borrowed [FileVolatileSlice] object.
+    pub unsafe fn borrow_mut(&self) -> FileVolatileBuf {
+        FileVolatileBuf {
+            addr: self.addr,
+            size: 0,
+            cap: self.size,
+        }
+    }
+
     /// Return a pointer to the start of the slice.
     pub fn as_ptr(&self) -> *mut u8 {
         self.addr as *mut u8
@@ -210,62 +223,58 @@ impl<'a> Bytes<usize> for FileVolatileSlice<'a> {
     }
 }
 
-#[cfg(feature = "async-io")]
-pub use async_io::FileVolatileBuf;
+/// An adapter structure to support `io-uring` based asynchronous IO.
+///
+/// The [tokio-uring] framework needs to take ownership of data buffers during asynchronous IO
+/// operations. The [FileVolatileBuf] converts a referenced buffer to a buffer compatible with
+/// the [tokio-uring] APIs.
+///
+/// # Safety
+/// The buffer is borrowed without a lifetime parameter, so the caller must ensure that
+/// the [FileVolatileBuf] object doesn't out-live the borrowed buffer. And during the lifetime
+/// of the [FileVolatileBuf] object, the referenced buffer must be stable.
+///
+/// [tokio-uring]: https://github.com/tokio-rs/tokio-uring
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+pub struct FileVolatileBuf {
+    addr: usize,
+    size: usize,
+    cap: usize,
+}
 
-#[cfg(feature = "async-io")]
+impl FileVolatileBuf {
+    /// Create a [FileVolatileBuf] object from a buffer.
+    ///
+    /// # Safety
+    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer.
+    pub unsafe fn new(buf: &mut [u8]) -> Self {
+        Self {
+            addr: buf.as_mut_ptr() as usize,
+            size: 0,
+            cap: buf.len(),
+        }
+    }
+
+    /// Create a [FileVolatileBuf] object from a raw pointer.
+    ///
+    /// # Safety
+    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer.
+    pub unsafe fn from_raw(addr: *mut u8, size: usize, cap: usize) -> Self {
+        Self {
+            addr: addr as usize,
+            size,
+            cap,
+        }
+    }
+}
+
+#[cfg(all(feature = "async-io", target_os = "linux"))]
 mod async_io {
     use super::*;
 
-    /// An adapter structure to support `io-uring` based asynchronous IO.
-    ///
-    /// The [tokio-uring] framework needs to take ownership of data buffers during asynchronous IO
-    /// operations. The [FileVolatileBuf] converts a referenced buffer to a buffer compatible with
-    /// the [tokio-uring] APIs.
-    ///
-    /// # Safety
-    /// The buffer is borrowed without a lifetime parameter, so the caller must ensure that
-    /// the [FileVolatileBuf] object doesn't out-live the borrowed buffer. And during the lifetime
-    /// of the [FileVolatileBuf] object, the referenced buffer must be stable.
-    ///
-    /// [tokio-uring]: https://github.com/tokio-rs/tokio-uring
-    #[allow(dead_code)]
-    #[derive(Clone, Copy, Debug)]
-    pub struct FileVolatileBuf {
-        addr: usize,
-        size: usize,
-        cap: usize,
-    }
-
-    impl FileVolatileBuf {
-        /// Create a [FileVolatileBuf] object from a buffer.
-        ///
-        /// # Safety
-        /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
-        /// the referenced buffer.
-        pub unsafe fn new(buf: &mut [u8]) -> Self {
-            Self {
-                addr: buf.as_mut_ptr() as usize,
-                size: 0,
-                cap: buf.len(),
-            }
-        }
-
-        /// Create a [FileVolatileBuf] object from a raw pointer.
-        ///
-        /// # Safety
-        /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
-        /// the referenced buffer.
-        pub unsafe fn from_raw(addr: *mut u8, size: usize, cap: usize) -> Self {
-            Self {
-                addr: addr as usize,
-                size,
-                cap,
-            }
-        }
-    }
-
-    #[cfg(target_os = "linux")]
     unsafe impl tokio_uring::buf::IoBuf for FileVolatileBuf {
         fn stable_ptr(&self) -> *const u8 {
             self.addr as *const u8
@@ -280,7 +289,6 @@ mod async_io {
         }
     }
 
-    #[cfg(target_os = "linux")]
     unsafe impl tokio_uring::buf::IoBufMut for FileVolatileBuf {
         fn stable_mut_ptr(&mut self) -> *mut u8 {
             self.addr as *mut u8
@@ -291,22 +299,7 @@ mod async_io {
         }
     }
 
-    impl<'a> FileVolatileSlice<'a> {
-        /// Borrow a [FileVolatileSlice] to temporarily elide the lifetime parameter.
-        ///
-        /// # Safety
-        /// The [FileVolatileSlice] is borrowed without a lifetime parameter, so the caller must
-        /// ensure that [FileVolatileBuf] doesn't out-live the borrowed [FileVolatileSlice] object.
-        pub unsafe fn borrow_mut(&self) -> FileVolatileBuf {
-            FileVolatileBuf {
-                addr: self.addr,
-                size: 0,
-                cap: self.size,
-            }
-        }
-    }
-
-    #[cfg(all(test, target_os = "linux"))]
+    #[cfg(test)]
     mod tests {
         use super::*;
         use tokio_uring::buf::{IoBuf, IoBufMut};
