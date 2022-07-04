@@ -22,6 +22,20 @@ impl Runtime {
     /// # Panic
     /// Panic if failed to create the Runtime object.
     pub fn new() -> Self {
+        // Check whether io-uring is available.
+        // TODO: use io-uring probe to detect supported operations.
+        #[cfg(target_os = "linux")]
+        {
+            let ok = tokio_uring::start(async {
+                tokio_uring::fs::File::open("/proc/self/mounts")
+                    .await
+                    .is_ok()
+            });
+            if ok {
+                return Runtime::Uring;
+            }
+        }
+
         // Create tokio runtime if io-uring is not supported.
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -49,7 +63,7 @@ impl Default for Runtime {
 }
 
 std::thread_local! {
-    static CURRENT_RUNTIME: Runtime = Runtime::new();
+    pub(crate) static CURRENT_RUNTIME: Runtime = Runtime::new();
 }
 
 /// Run a callback with the default `Runtime` object.
