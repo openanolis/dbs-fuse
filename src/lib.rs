@@ -18,6 +18,8 @@
 //! [tokio]: https://tokio.rs/
 //! [tokio-uring]: https://github.com/tokio-rs/tokio-uring
 
+#[cfg(feature = "async-io")]
+pub mod async_runtime;
 pub mod buf;
 pub mod file_traits;
 #[cfg(feature = "async-io")]
