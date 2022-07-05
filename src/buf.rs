@@ -17,10 +17,10 @@
 //! [tokio]: https://tokio.rs/
 //! [tokio-uring]: https://github.com/tokio-rs/tokio-uring
 
-use std::io::{Read, Write};
+use std::io::{IoSlice, IoSliceMut, Read, Write};
 use std::marker::PhantomData;
 use std::sync::atomic::Ordering;
-use std::{error, fmt};
+use std::{error, fmt, slice};
 
 use vm_memory::{
     bitmap::BitmapSlice, volatile_memory::Error as VError, AtomicAccess, Bytes, VolatileSlice,
@@ -257,16 +257,78 @@ impl FileVolatileBuf {
         }
     }
 
+    /// Create a [FileVolatileBuf] object from a buffer with specified `size`.
+    ///
+    /// # Safety
+    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer.
+    ///
+    /// # Panic
+    /// Panic if `size` is bigger than `buf.len()`.
+    pub unsafe fn with_size(buf: &mut [u8], size: usize) -> Self {
+        assert!(size <= buf.len());
+        Self {
+            addr: buf.as_mut_ptr() as usize,
+            size,
+            cap: buf.len(),
+        }
+    }
+
     /// Create a [FileVolatileBuf] object from a raw pointer.
     ///
     /// # Safety
     /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
     /// the referenced buffer.
+    ///
+    /// # Panic
+    /// Panic if `size` is bigger than `cap`.
     pub unsafe fn from_raw(addr: *mut u8, size: usize, cap: usize) -> Self {
+        assert!(size <= cap);
         Self {
             addr: addr as usize,
             size,
             cap,
+        }
+    }
+
+    /// Generate an `IoSlice` object to read data from the buffer.
+    pub fn io_slice(&self) -> IoSlice {
+        let buf = unsafe { slice::from_raw_parts(self.addr as *const u8, self.size) };
+        IoSlice::new(buf)
+    }
+
+    /// Generate an `IoSliceMut` object to write data into the buffer.
+    pub fn io_slice_mut(&self) -> IoSliceMut {
+        unsafe {
+            let ptr = (self.addr as *mut u8).add(self.size);
+            let sz = self.cap - self.size;
+            let buf = slice::from_raw_parts_mut(ptr, sz);
+            IoSliceMut::new(buf)
+        }
+    }
+
+    /// Get capacity of the buffer.
+    pub fn cap(&self) -> usize {
+        self.cap
+    }
+
+    /// Check whether the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    /// Get size of initialized data in the buffer.
+    pub fn len(&self) -> usize {
+        self.size
+    }
+
+    /// Set size of initialized data in the buffer.
+    ///
+    /// # Safety
+    /// Caller needs to ensure size is less than or equal to `cap`.
+    pub unsafe fn set_size(&mut self, size: usize) {
+        if size <= self.cap {
+            self.size = size;
         }
     }
 }
@@ -295,7 +357,7 @@ mod async_io {
         }
 
         unsafe fn set_init(&mut self, pos: usize) {
-            self.size = pos;
+            self.set_size(pos)
         }
     }
 
@@ -313,6 +375,35 @@ mod async_io {
             assert_eq!(buf2.stable_ptr(), buf.as_ptr());
             unsafe { *buf2.stable_mut_ptr() = b'a' };
             assert_eq!(buf[0], b'a');
+        }
+
+        #[test]
+        fn test_file_volatile_slice_with_size() {
+            let mut buf = [0u8; 1024];
+            let mut buf2 = unsafe { FileVolatileBuf::with_size(&mut buf, 256) };
+
+            assert_eq!(buf2.bytes_total(), 1024);
+            assert_eq!(buf2.bytes_init(), 256);
+            assert_eq!(buf2.stable_ptr(), buf.as_ptr());
+            assert_eq!(buf2.stable_mut_ptr(), buf.as_mut_ptr());
+            unsafe { buf2.set_init(512) };
+            assert_eq!(buf2.bytes_init(), 512);
+            unsafe { buf2.set_init(2048) };
+            assert_eq!(buf2.bytes_init(), 512);
+        }
+
+        #[test]
+        fn test_file_volatile_slice_io_slice() {
+            let mut buf = [0u8; 1024];
+            let buf2 = unsafe { FileVolatileBuf::with_size(&mut buf, 256) };
+
+            let slice = buf2.io_slice_mut();
+            assert_eq!(slice.len(), 768);
+            assert_eq!(unsafe { buf2.stable_ptr().add(256) }, slice.as_ptr());
+
+            let slice2 = buf2.io_slice();
+            assert_eq!(slice2.len(), 256);
+            assert_eq!(buf2.stable_ptr(), slice2.as_ptr());
         }
     }
 }
