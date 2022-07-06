@@ -11,10 +11,14 @@
 //! - [FileReadWriteVolatile]: A trait similar to `Read` and `Write`, but uses [FileVolatileSlice] objects as data buffers.
 //! - [FileVolatileSlice]: An adapter structure to work around limitations of the `vm-memory` crate.
 //! - [FileVolatileBuf]: An adapter structure to support `io-uring` based asynchronous IO.
+//! - [File]: An adapter for for [tokio::fs::File] and [tokio-uring::fs::File].
+//! - [Runtime]: An adapter for for [tokio::runtime::Runtime] and [tokio-uring::Runtime].
 //!
 //! [FileReadWriteVolatile]: crate::file_traits::FileReadWriteVolatile
 //! [FileVolatileSlice]: crate::buf::FileVolatileSlice
 //! [FileVolatileBuf]: crate::buf::FileVolatileBuf
+//! [File]: crate::async_file::File
+//! [Runtime]: crate::async_runtime::Runtime
 //! [tokio]: https://tokio.rs/
 //! [tokio-uring]: https://github.com/tokio-rs/tokio-uring
 

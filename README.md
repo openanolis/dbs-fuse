@@ -10,6 +10,8 @@ The `dbs-fuse` crate adds a wrapper layer over [tokio](https://tokio.rs/) and [t
 - [FileReadWriteVolatile](https://docs.rs/dbs-fuse/latest/dbs_fuse/file_traits/trait.FileReadWriteVolatile.html): A trait similar to `Read` and `Write`, but uses [FileVolatileSlice] objects as data buffers.
 - [FileVolatileSlice](https://docs.rs/dbs-fuse/latest/dbs_fuse/buf/struct.FileVolatileSlice.html): An adapter structure to work around limitations of the `vm-memory` crate.
 - [FileVolatileBuf](https://docs.rs/dbs-fuse/latest/dbs_fuse/buf/struct.FileVolatileBuf.html): An adapter structure to support `io-uring` based asynchronous IO.
+- File
+- Runtime
 
 ## License
 
