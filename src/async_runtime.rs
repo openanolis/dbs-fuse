@@ -10,7 +10,7 @@ pub enum Runtime {
     Tokio(tokio::runtime::Runtime),
     #[cfg(target_os = "linux")]
     /// Tokio-uring Runtime.
-    Uring,
+    Uring(std::sync::Mutex<tokio_uring::Runtime>),
 }
 
 impl Runtime {
@@ -23,16 +23,11 @@ impl Runtime {
     /// Panic if failed to create the Runtime object.
     pub fn new() -> Self {
         // Check whether io-uring is available.
-        // TODO: use io-uring probe to detect supported operations.
         #[cfg(target_os = "linux")]
         {
-            let ok = tokio_uring::start(async {
-                tokio_uring::fs::File::open("/proc/self/mounts")
-                    .await
-                    .is_ok()
-            });
-            if ok {
-                return Runtime::Uring;
+            // TODO: use io-uring probe to detect supported operations.
+            if let Ok(rt) = tokio_uring::Runtime::new() {
+                return Runtime::Uring(std::sync::Mutex::new(rt));
             }
         }
 
@@ -48,10 +43,8 @@ impl Runtime {
     pub fn block_on<F: Future>(&self, f: F) -> F::Output {
         match self {
             Runtime::Tokio(rt) => rt.block_on(f),
-            // Due to limitation of tokio_uring API, the runtime object is created on-demand.
-            // TODO: expose tokio-uring Runtime object.
             #[cfg(target_os = "linux")]
-            Runtime::Uring => tokio_uring::start(f),
+            Runtime::Uring(rt) => rt.lock().unwrap().block_on(f),
         }
     }
 }
