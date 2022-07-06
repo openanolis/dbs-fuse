@@ -35,7 +35,7 @@ impl File {
         let ty = CURRENT_RUNTIME.with(|rt| match rt {
             Runtime::Tokio(_) => 1,
             #[cfg(target_os = "linux")]
-            Runtime::Uring => 2,
+            Runtime::Uring(_) => 2,
         });
 
         match ty {
@@ -91,12 +91,7 @@ impl File {
                 (res, bufs)
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => {
-                // TODO: enhance tokio-uring to support readv_at
-                let file = self.as_tokio_uring_file();
-                let res = preadv(file.as_raw_fd(), &mut bufs, offset);
-                (res, bufs)
-            }
+            File::Uring(_) => self.as_tokio_uring_file().readv_at(bufs, offset).await,
         }
     }
 
@@ -115,11 +110,7 @@ impl File {
                 (res, bufs[0])
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => {
-                self.as_tokio_uring_file()
-                    .write_at(buf, offset as u64)
-                    .await
-            }
+            File::Uring(_) => self.as_tokio_uring_file().write_at(buf, offset).await,
         }
     }
 
@@ -137,12 +128,7 @@ impl File {
                 (res, bufs)
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => {
-                // TODO: enhance tokio-uring to support writev_at
-                let file = self.as_tokio_uring_file();
-                let res = pwritev(file.as_raw_fd(), &bufs, offset);
-                (res, bufs)
-            }
+            File::Uring(_) => self.as_tokio_uring_file().writev_at(bufs, offset).await,
         }
     }
 
@@ -170,8 +156,19 @@ impl File {
         match self {
             File::Tokio(f) => f.try_clone().await.map(File::Tokio),
             #[cfg(target_os = "linux")]
-            // TODO
-            File::Uring(_f) => unimplemented!(),
+            File::Uring(_) => {
+                let file = self.as_tokio_uring_file();
+                // Safe because file.as_raw_fd() is valid RawFd and we have checked the result.
+                let fd = unsafe { libc::dup(file.as_raw_fd()) };
+                if fd < 0 {
+                    Err(std::io::Error::last_os_error())
+                } else {
+                    // Safe because the fd is valid.
+                    let f = unsafe { tokio_uring::fs::File::from_raw_fd(fd) };
+                    let p = Box::into_raw(Box::new(f)) as usize;
+                    Ok(File::Uring(p))
+                }
+            }
         }
     }
 
@@ -414,6 +411,29 @@ mod tests {
 
             let res = std::fs::read_to_string(path.join("test.txt")).unwrap();
             assert_eq!(&res, "test");
+        });
+    }
+
+    #[test]
+    fn test_async_try_clone() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.as_path().to_path_buf();
+
+        block_on(async {
+            let file = File::async_open(path.join("test.txt"), true, true)
+                .await
+                .unwrap();
+
+            let file2 = file.async_try_clone().await.unwrap();
+            drop(file);
+
+            let buffer = b"test";
+            let buf = unsafe {
+                FileVolatileBuf::from_raw(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len())
+            };
+            let (res, buf) = file2.async_write_at(buf, 0).await;
+            assert_eq!(res.unwrap(), 4);
+            assert_eq!(buf.len(), 4);
         });
     }
 }
