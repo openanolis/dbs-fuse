@@ -865,6 +865,7 @@ mod async_io {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use crate::buf::FileVolatileSlice;
 
         #[test]
         fn io_uring_async_read_at_volatile() {
@@ -874,8 +875,8 @@ mod async_io {
 
             let mut buf = vec![0; 4096];
             tokio_uring::start(async {
-                let vslice = unsafe { FileVolatileSlice::new(buf.as_mut_ptr(), buf.len()) };
-                let vbuf = unsafe { vslice.borrow_mut() };
+                let vslice = unsafe { FileVolatileSlice::from_mut_slice(&mut buf) };
+                let vbuf = unsafe { vslice.borrow_as_buf(false) };
                 let file = File::open(&path).await.unwrap();
                 let (res, vbuf) = file.async_read_at_volatile(vbuf, 4).await;
                 assert_eq!(res.unwrap(), 10);
@@ -896,10 +897,12 @@ mod async_io {
             let mut buf2 = vec![0; 4];
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), buf1.len()) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr(), buf2.len()) };
-                let vbufs = vec![unsafe { vslice1.borrow_mut() }, unsafe {
-                    vslice2.borrow_mut()
+                let vslice1 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
+                let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
+                    vslice2.borrow_as_buf(false)
                 }];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -913,10 +916,12 @@ mod async_io {
             let mut buf2 = vec![0; 4];
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), buf1.len()) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr(), buf2.len()) };
-                let vbufs = vec![unsafe { vslice1.borrow_mut() }, unsafe {
-                    vslice2.borrow_mut()
+                let vslice1 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr(), buf2.len()) };
+                let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
+                    vslice2.borrow_as_buf(false)
                 }];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -929,8 +934,9 @@ mod async_io {
             assert_eq!(buf1[9], b't');
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), buf1.len()) };
-                let vbufs = vec![unsafe { vslice1.borrow_mut() }];
+                let vslice1 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
+                let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }];
                 let file = File::open(&path).await.unwrap();
                 let (res, _vbufs) = file.async_read_vectored_at_volatile(vbufs, 14).await;
                 assert_eq!(res.unwrap(), 0);
@@ -944,21 +950,27 @@ mod async_io {
             });
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), 1) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(4), 1) };
-                let vslice6 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(5), 1) };
-                let vslice7 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(6), 1) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
+                let vslice6 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
+                let vslice7 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(6), 1) };
                 let vbufs = vec![
-                    unsafe { vslice1.borrow_mut() },
-                    unsafe { vslice2.borrow_mut() },
-                    unsafe { vslice3.borrow_mut() },
-                    unsafe { vslice4.borrow_mut() },
-                    unsafe { vslice5.borrow_mut() },
-                    unsafe { vslice6.borrow_mut() },
-                    unsafe { vslice7.borrow_mut() },
+                    unsafe { vslice1.borrow_as_buf(false) },
+                    unsafe { vslice2.borrow_as_buf(false) },
+                    unsafe { vslice3.borrow_as_buf(false) },
+                    unsafe { vslice4.borrow_as_buf(false) },
+                    unsafe { vslice5.borrow_as_buf(false) },
+                    unsafe { vslice6.borrow_as_buf(false) },
+                    unsafe { vslice7.borrow_as_buf(false) },
                 ];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -974,19 +986,24 @@ mod async_io {
             });
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), 1) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(4), 1) };
-                let vslice6 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(5), 1) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
+                let vslice6 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(5), 1) };
                 let vbufs = vec![
-                    unsafe { vslice1.borrow_mut() },
-                    unsafe { vslice2.borrow_mut() },
-                    unsafe { vslice3.borrow_mut() },
-                    unsafe { vslice4.borrow_mut() },
-                    unsafe { vslice5.borrow_mut() },
-                    unsafe { vslice6.borrow_mut() },
+                    unsafe { vslice1.borrow_as_buf(false) },
+                    unsafe { vslice2.borrow_as_buf(false) },
+                    unsafe { vslice3.borrow_as_buf(false) },
+                    unsafe { vslice4.borrow_as_buf(false) },
+                    unsafe { vslice5.borrow_as_buf(false) },
+                    unsafe { vslice6.borrow_as_buf(false) },
                 ];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -995,17 +1012,21 @@ mod async_io {
             });
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), 1) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(3), 1) };
-                let vslice5 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(4), 1) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
+                let vslice5 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(4), 1) };
                 let vbufs = vec![
-                    unsafe { vslice1.borrow_mut() },
-                    unsafe { vslice2.borrow_mut() },
-                    unsafe { vslice3.borrow_mut() },
-                    unsafe { vslice4.borrow_mut() },
-                    unsafe { vslice5.borrow_mut() },
+                    unsafe { vslice1.borrow_as_buf(false) },
+                    unsafe { vslice2.borrow_as_buf(false) },
+                    unsafe { vslice3.borrow_as_buf(false) },
+                    unsafe { vslice4.borrow_as_buf(false) },
+                    unsafe { vslice5.borrow_as_buf(false) },
                 ];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -1014,15 +1035,18 @@ mod async_io {
             });
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), 1) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(2), 1) };
-                let vslice4 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(3), 1) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
+                let vslice4 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(3), 1) };
                 let vbufs = vec![
-                    unsafe { vslice1.borrow_mut() },
-                    unsafe { vslice2.borrow_mut() },
-                    unsafe { vslice3.borrow_mut() },
-                    unsafe { vslice4.borrow_mut() },
+                    unsafe { vslice1.borrow_as_buf(false) },
+                    unsafe { vslice2.borrow_as_buf(false) },
+                    unsafe { vslice3.borrow_as_buf(false) },
+                    unsafe { vslice4.borrow_as_buf(false) },
                 ];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -1031,13 +1055,15 @@ mod async_io {
             });
 
             tokio_uring::start(async {
-                let vslice1 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr(), 1) };
-                let vslice2 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(1), 1) };
-                let vslice3 = unsafe { FileVolatileSlice::new(buf1.as_mut_ptr().add(2), 1) };
+                let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
+                let vslice2 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
+                let vslice3 =
+                    unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(2), 1) };
                 let vbufs = vec![
-                    unsafe { vslice1.borrow_mut() },
-                    unsafe { vslice2.borrow_mut() },
-                    unsafe { vslice3.borrow_mut() },
+                    unsafe { vslice1.borrow_as_buf(false) },
+                    unsafe { vslice2.borrow_as_buf(false) },
+                    unsafe { vslice3.borrow_as_buf(false) },
                 ];
                 let file = File::open(&path).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
@@ -1063,7 +1089,8 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_volatile(slice).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1081,8 +1108,8 @@ mod tests {
         let mut buf2 = [0x0u8; 32];
         let slices = unsafe {
             [
-                FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf2.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf2.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         assert_eq!(file.read_vectored_volatile(&slices).unwrap(), 32);
@@ -1100,7 +1127,8 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 31];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_volatile(slice).unwrap();
         assert_eq!(buf[..31], buf2);
 
@@ -1115,7 +1143,8 @@ mod tests {
         file.write_all(&buf).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_at_volatile(slice, 0).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1133,8 +1162,8 @@ mod tests {
         let mut buf2 = [0x0u8; 32];
         let slices = unsafe {
             [
-                FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf2.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf2.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         assert_eq!(file.read_vectored_at_volatile(&slices, 0).unwrap(), 32);
@@ -1152,7 +1181,8 @@ mod tests {
         file.write_all(&buf).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_at_volatile(slice, 0).unwrap();
         assert_eq!(buf, buf2);
 
@@ -1165,12 +1195,14 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 = unsafe { FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_volatile(slice).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1184,8 +1216,8 @@ mod tests {
         let mut buf = [0xfu8; 32];
         let slices1 = unsafe {
             [
-                FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         file.write_vectored_volatile(&slices1).unwrap();
@@ -1194,8 +1226,8 @@ mod tests {
         let mut buf2 = [0x0u8; 32];
         let slices = unsafe {
             [
-                FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf2.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf2.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         assert_eq!(file.read_vectored_volatile(&slices).unwrap(), 32);
@@ -1209,12 +1241,14 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 = unsafe { FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_all_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_volatile(slice).unwrap();
         assert_eq!(buf, buf2);
 
@@ -1226,12 +1260,14 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 = unsafe { FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         assert_eq!(file.read_at_volatile(slice, 0).unwrap(), 32);
         assert_eq!(buf, buf2);
 
@@ -1246,8 +1282,8 @@ mod tests {
         let mut buf = [0xfu8; 32];
         let slices1 = unsafe {
             [
-                FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         file.write_vectored_volatile(&slices1).unwrap();
@@ -1256,8 +1292,8 @@ mod tests {
         let mut buf2 = [0x0u8; 32];
         let slices = unsafe {
             [
-                FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, 16),
-                FileVolatileSlice::new((buf2.as_mut_ptr() as *mut u8).add(16), 16),
+                FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, 16),
+                FileVolatileSlice::from_raw_ptr((buf2.as_mut_ptr() as *mut u8).add(16), 16),
             ]
         };
         assert_eq!(file.read_vectored_at_volatile(&slices, 0).unwrap(), 32);
@@ -1272,12 +1308,14 @@ mod tests {
         let mut file = TempFile::new().unwrap().into_file();
 
         let mut buf = [0xfu8; 32];
-        let slice1 = unsafe { FileVolatileSlice::new(buf.as_mut_ptr() as *mut u8, buf.len()) };
+        let slice1 =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf.as_mut_ptr() as *mut u8, buf.len()) };
         file.write_all_volatile(slice1).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let mut buf2 = [0x0u8; 32];
-        let slice = unsafe { FileVolatileSlice::new(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
+        let slice =
+            unsafe { FileVolatileSlice::from_raw_ptr(buf2.as_mut_ptr() as *mut u8, buf2.len()) };
         file.read_exact_at_volatile(slice, 0).unwrap();
         assert_eq!(buf, buf2);
 

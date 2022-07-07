@@ -373,7 +373,11 @@ mod tests {
 
             let buffer = b"test";
             let buf = unsafe {
-                FileVolatileBuf::from_raw(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len())
+                FileVolatileBuf::from_raw_ptr(
+                    buffer.as_ptr() as *mut u8,
+                    buffer.len(),
+                    buffer.len(),
+                )
             };
             let (res, buf) = file.async_write_at(buf, 0).await;
             assert_eq!(res.unwrap(), 4);
@@ -396,11 +400,19 @@ mod tests {
 
             let buffer = b"tes";
             let buf = unsafe {
-                FileVolatileBuf::from_raw(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len())
+                FileVolatileBuf::from_raw_ptr(
+                    buffer.as_ptr() as *mut u8,
+                    buffer.len(),
+                    buffer.len(),
+                )
             };
             let buffer2 = b"t";
             let buf2 = unsafe {
-                FileVolatileBuf::from_raw(buffer2.as_ptr() as *mut u8, buffer2.len(), buffer2.len())
+                FileVolatileBuf::from_raw_ptr(
+                    buffer2.as_ptr() as *mut u8,
+                    buffer2.len(),
+                    buffer2.len(),
+                )
             };
             let bufs = vec![buf, buf2];
             let (res, bufs) = file.async_writev_at(bufs, 0).await;
@@ -429,7 +441,11 @@ mod tests {
 
             let buffer = b"test";
             let buf = unsafe {
-                FileVolatileBuf::from_raw(buffer.as_ptr() as *mut u8, buffer.len(), buffer.len())
+                FileVolatileBuf::from_raw_ptr(
+                    buffer.as_ptr() as *mut u8,
+                    buffer.len(),
+                    buffer.len(),
+                )
             };
             let (res, buf) = file2.async_write_at(buf, 0).await;
             assert_eq!(res.unwrap(), 4);
