@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//! `Runtime` to wrap over tokio current-thread `Runtime` and tokio-uring `Runtime`.
+
 use std::future::Future;
 
 #[cfg(target_os = "linux")]
