@@ -17,12 +17,7 @@ pub enum File {
     Tokio(tokio::fs::File),
     #[cfg(target_os = "linux")]
     /// Tokio-uring asynchronous `File`.
-    ///
-    /// `tokio_uring::fs::File` is !Send, and it breaks all async functions because it's !Send.
-    /// On the other hand, tokio_uring::fs::File could only be used with tokio current thread
-    /// Runtime, which means it will never be sent. So play a trick here to make it works with
-    /// async functions.
-    Uring(usize),
+    Uring(RawFd, std::sync::Mutex<tokio_uring::fs::File>),
 }
 
 impl File {
@@ -53,7 +48,7 @@ impl File {
                 .create(create)
                 .open(path)
                 .await
-                .map(|v| File::Uring(Box::into_raw(Box::new(v)) as usize)),
+                .map(|v| File::Uring(v.as_raw_fd(), std::sync::Mutex::new(v))),
             _ => panic!("should not happen"),
         }
     }
@@ -73,7 +68,15 @@ impl File {
                 (res, bufs[0])
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => self.as_tokio_uring_file().read_at(buf, offset as u64).await,
+            File::Uring(fd, _) => {
+                // Safety: we rely on tokio_uring::fs::File internal implementation details.
+                // It should be implemented as self.async_try_clone().await.unwrap().read_at,
+                // but that causes two more syscalls.
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
+                let res = file.read_at(buf, offset).await;
+                std::mem::forget(file);
+                res
+            }
         }
     }
 
@@ -91,7 +94,15 @@ impl File {
                 (res, bufs)
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => self.as_tokio_uring_file().readv_at(bufs, offset).await,
+            File::Uring(fd, _) => {
+                // Safety: we rely on tokio_uring::fs::File internal implementation details.
+                // It should be implemented as self.async_try_clone().await.unwrap().readv_at,
+                // but that causes two more syscalls.
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
+                let res = file.readv_at(bufs, offset).await;
+                std::mem::forget(file);
+                res
+            }
         }
     }
 
@@ -110,7 +121,15 @@ impl File {
                 (res, bufs[0])
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => self.as_tokio_uring_file().write_at(buf, offset).await,
+            File::Uring(fd, _) => {
+                // Safety: we rely on tokio_uring::fs::File internal implementation details.
+                // It should be implemented as self.async_try_clone().await.unwrap().write_at,
+                // but that causes two more syscalls.
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
+                let res = file.write_at(buf, offset).await;
+                std::mem::forget(file);
+                res
+            }
         }
     }
 
@@ -128,24 +147,22 @@ impl File {
                 (res, bufs)
             }
             #[cfg(target_os = "linux")]
-            File::Uring(_) => self.as_tokio_uring_file().writev_at(bufs, offset).await,
+            File::Uring(fd, _) => {
+                // Safety: we rely on tokio_uring::fs::File internal implementation details.
+                // It should be implemented as self.async_try_clone().await.unwrap().writev_at,
+                // but that causes two more syscalls.
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
+                let res = file.writev_at(bufs, offset).await;
+                std::mem::forget(file);
+                res
+            }
         }
     }
 
     /// Get metadata about the file.
     pub fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
-        let file = match self {
-            File::Tokio(f) => {
-                // Safe because we have manually forget() the `file` object below.
-                unsafe { std::fs::File::from_raw_fd(f.as_raw_fd()) }
-            }
-            #[cfg(target_os = "linux")]
-            File::Uring(_) => {
-                // Safe because we have manually forget() the `file` object below.
-                let f = self.as_tokio_uring_file();
-                unsafe { std::fs::File::from_raw_fd(f.as_raw_fd()) }
-            }
-        };
+        // Safe because we have manually forget() the `file` object below.
+        let file = unsafe { std::fs::File::from_raw_fd(self.as_raw_fd()) };
         let res = file.metadata();
         std::mem::forget(file);
         res
@@ -156,33 +173,17 @@ impl File {
         match self {
             File::Tokio(f) => f.try_clone().await.map(File::Tokio),
             #[cfg(target_os = "linux")]
-            File::Uring(_) => {
-                let file = self.as_tokio_uring_file();
+            File::Uring(fd, _) => {
                 // Safe because file.as_raw_fd() is valid RawFd and we have checked the result.
-                let fd = unsafe { libc::dup(file.as_raw_fd()) };
+                let fd = unsafe { libc::dup(*fd) };
                 if fd < 0 {
                     Err(std::io::Error::last_os_error())
                 } else {
-                    // Safe because the fd is valid.
-                    let f = unsafe { tokio_uring::fs::File::from_raw_fd(fd) };
-                    let p = Box::into_raw(Box::new(f)) as usize;
-                    Ok(File::Uring(p))
+                    // Safety: we rely on tokio_uring::fs::File internal implementation details.
+                    let file = unsafe { tokio_uring::fs::File::from_raw_fd(fd) };
+                    Ok(File::Uring(fd, std::sync::Mutex::new(file)))
                 }
             }
-        }
-    }
-
-    // Convert back to an tokio_uring::fs::File object.
-    //
-    // # Panic
-    // Panics if `self` is not a `tokio_uring::fs::File` object.
-    #[cfg(target_os = "linux")]
-    fn as_tokio_uring_file(&self) -> &tokio_uring::fs::File {
-        if let File::Uring(v) = self {
-            // Safe because `v` is a raw pointer to a `tokio_uring::fs::File` object.
-            unsafe { &*(*v as *const tokio_uring::fs::File) }
-        } else {
-            panic!("as_tokio_uring_file() should only be called for toki_uring::fs::File objects");
         }
     }
 }
@@ -192,7 +193,7 @@ impl AsRawFd for File {
         match self {
             File::Tokio(f) => f.as_raw_fd(),
             #[cfg(target_os = "linux")]
-            File::Uring(_) => self.as_tokio_uring_file().as_raw_fd(),
+            File::Uring(fd, _) => *fd,
         }
     }
 }
@@ -201,16 +202,6 @@ impl Debug for File {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let fd = self.as_raw_fd();
         write!(f, "Async File {}", fd)
-    }
-}
-
-impl Drop for File {
-    fn drop(&mut self) {
-        #[cfg(target_os = "linux")]
-        if let File::Uring(f) = self {
-            // Safe because it's paired with Box::into_raw() in File::new().
-            drop(unsafe { Box::from_raw(*f as *mut tokio_uring::fs::File) });
-        }
     }
 }
 

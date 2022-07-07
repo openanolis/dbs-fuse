@@ -72,6 +72,24 @@ pub fn block_on<F: Future>(f: F) -> F::Output {
     CURRENT_RUNTIME.with(|rt| rt.block_on(f))
 }
 
+/// Spawns a new asynchronous task, returning a [`JoinHandle`] for it.
+///
+/// Spawning a task enables the task to execute concurrently to other tasks.
+/// There is no guarantee that a spawned task will execute to completion. When a
+/// runtime is shutdown, all outstanding tasks are dropped, regardless of the
+/// lifecycle of that task.
+///
+/// This function must be called from the context of a `tokio-uring` runtime.
+///
+/// [`JoinHandle`]: tokio::task::JoinHandle
+pub fn spawn<T: std::future::Future + 'static>(task: T) -> tokio::task::JoinHandle<T::Output> {
+    CURRENT_RUNTIME.with(|rt| match rt {
+        Runtime::Tokio(_) => tokio::task::spawn_local(task),
+        #[cfg(target_os = "linux")]
+        Runtime::Uring(_) => tokio_uring::spawn(task),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
