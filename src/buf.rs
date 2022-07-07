@@ -69,6 +69,14 @@ pub struct FileVolatileSlice<'a> {
 }
 
 impl<'a> FileVolatileSlice<'a> {
+    fn new(addr: *mut u8, size: usize) -> Self {
+        Self {
+            addr: addr as usize,
+            size,
+            phantom: PhantomData,
+        }
+    }
+
     /// Create a new instance of [`FileVolatileSlice`] from a raw pointer.
     ///
     /// # Safety
@@ -83,7 +91,7 @@ impl<'a> FileVolatileSlice<'a> {
     /// # use vm_memory::bytes::Bytes;
     /// # use std::sync::atomic::Ordering;
     /// let mut buffer = [0u8; 1024];
-    /// let s = unsafe { FileVolatileSlice::new(buffer.as_mut_ptr(), buffer.len()) };
+    /// let s = unsafe { FileVolatileSlice::from_raw_ptr(buffer.as_mut_ptr(), buffer.len()) };
     ///
     /// {
     ///     let o: u32 = s.load(0x10, Ordering::Acquire).unwrap();
@@ -91,18 +99,23 @@ impl<'a> FileVolatileSlice<'a> {
     ///     s.store(1u8, 0x10, Ordering::Release).unwrap();
     ///
     ///     let s2 = s.as_volatile_slice();
-    ///     let s3 = FileVolatileSlice::new_from_volatile_slice(&s2);
+    ///     let s3 = FileVolatileSlice::from_volatile_slice(&s2);
     ///     assert_eq!(s3.len(), 1024);
     /// }
     ///
     /// assert_eq!(buffer[0x10], 1);
     /// ```
-    pub unsafe fn new(addr: *mut u8, size: usize) -> Self {
-        Self {
-            addr: addr as usize,
-            size,
-            phantom: PhantomData,
-        }
+    pub unsafe fn from_raw_ptr(addr: *mut u8, size: usize) -> Self {
+        Self::new(addr, size)
+    }
+
+    /// Create a new instance of [`FileVolatileSlice`] from a mutable slice.
+    ///
+    /// # Safety
+    /// The caller must guarantee that all other users of the given chunk of memory are using
+    /// volatile accesses.
+    pub unsafe fn from_mut_slice(buf: &'a mut [u8]) -> Self {
+        Self::new(buf.as_mut_ptr(), buf.len())
     }
 
     /// Create a new [`FileVolatileSlice`] from [`vm_memory::VolatileSlice`] and strip off the
@@ -112,8 +125,8 @@ impl<'a> FileVolatileSlice<'a> {
     ///
     /// [`vm_memory::BitmapSlice`]: https://docs.rs/vm-memory/latest/vm_memory/bitmap/trait.BitmapSlice.html
     /// [`vm_memory::VolatileSlice`]: https://docs.rs/vm-memory/latest/vm_memory/volatile_memory/struct.VolatileSlice.html
-    pub fn new_from_volatile_slice<S: BitmapSlice>(s: &VolatileSlice<'a, S>) -> Self {
-        unsafe { Self::new(s.as_ptr(), s.len()) }
+    pub fn from_volatile_slice<S: BitmapSlice>(s: &VolatileSlice<'a, S>) -> Self {
+        Self::new(s.as_ptr(), s.len())
     }
 
     /// Create a [`vm_memory::VolatileSlice`] from [FileVolatileSlice] without dirty page tracking.
@@ -123,15 +136,17 @@ impl<'a> FileVolatileSlice<'a> {
         unsafe { VolatileSlice::new(self.as_ptr(), self.len()) }
     }
 
-    /// Borrow a [FileVolatileSlice] to temporarily elide the lifetime parameter.
+    /// Borrow as a [FileVolatileSlice] object to temporarily elide the lifetime parameter.
     ///
     /// # Safety
     /// The [FileVolatileSlice] is borrowed without a lifetime parameter, so the caller must
     /// ensure that [FileVolatileBuf] doesn't out-live the borrowed [FileVolatileSlice] object.
-    pub unsafe fn borrow_mut(&self) -> FileVolatileBuf {
+    pub unsafe fn borrow_as_buf(&self, inited: bool) -> FileVolatileBuf {
+        let size = if inited { self.size } else { 0 };
+
         FileVolatileBuf {
             addr: self.addr,
-            size: 0,
+            size,
             cap: self.size,
         }
     }
@@ -163,7 +178,7 @@ impl<'a> FileVolatileSlice<'a> {
             .size
             .checked_sub(count)
             .ok_or(Error::OutOfBounds { addr: new_addr })?;
-        unsafe { Ok(Self::new(new_addr as *mut u8, new_size)) }
+        Ok(Self::new(new_addr as *mut u8, new_size))
     }
 }
 
@@ -244,11 +259,13 @@ pub struct FileVolatileBuf {
 }
 
 impl FileVolatileBuf {
-    /// Create a [FileVolatileBuf] object from a buffer.
+    /// Create a [FileVolatileBuf] object from a mutable slice, eliding the lifetime associated
+    /// with the slice.
     ///
     /// # Safety
-    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
-    /// the referenced buffer.
+    /// The caller needs to guarantee that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer. The caller must also guarantee that all other users of the given
+    /// chunk of memory are using volatile accesses.
     pub unsafe fn new(buf: &mut [u8]) -> Self {
         Self {
             addr: buf.as_mut_ptr() as usize,
@@ -257,15 +274,17 @@ impl FileVolatileBuf {
         }
     }
 
-    /// Create a [FileVolatileBuf] object from a buffer with specified `size`.
+    /// Create a [FileVolatileBuf] object containing `size` bytes of initialized data from a mutable
+    /// slice, eliding the lifetime associated with the slice.
     ///
     /// # Safety
-    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
-    /// the referenced buffer.
+    /// The caller needs to guarantee that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer. The caller must also guarantee that all other users of the given
+    /// chunk of memory are using volatile accesses.
     ///
     /// # Panic
     /// Panic if `size` is bigger than `buf.len()`.
-    pub unsafe fn with_size(buf: &mut [u8], size: usize) -> Self {
+    pub unsafe fn new_with_data(buf: &mut [u8], size: usize) -> Self {
         assert!(size <= buf.len());
         Self {
             addr: buf.as_mut_ptr() as usize,
@@ -277,12 +296,13 @@ impl FileVolatileBuf {
     /// Create a [FileVolatileBuf] object from a raw pointer.
     ///
     /// # Safety
-    /// The caller needs to ensure that the returned `FileVolatileBuf` object doesn't out-live
-    /// the referenced buffer.
+    /// The caller needs to guarantee that the returned `FileVolatileBuf` object doesn't out-live
+    /// the referenced buffer. The caller must also guarantee that all other users of the given
+    /// chunk of memory are using volatile accesses.
     ///
     /// # Panic
     /// Panic if `size` is bigger than `cap`.
-    pub unsafe fn from_raw(addr: *mut u8, size: usize, cap: usize) -> Self {
+    pub unsafe fn from_raw_ptr(addr: *mut u8, size: usize, cap: usize) -> Self {
         assert!(size <= cap);
         Self {
             addr: addr as usize,
@@ -299,12 +319,13 @@ impl FileVolatileBuf {
 
     /// Generate an `IoSliceMut` object to write data into the buffer.
     pub fn io_slice_mut(&self) -> IoSliceMut {
-        unsafe {
+        let buf = unsafe {
             let ptr = (self.addr as *mut u8).add(self.size);
             let sz = self.cap - self.size;
-            let buf = slice::from_raw_parts_mut(ptr, sz);
-            IoSliceMut::new(buf)
-        }
+            slice::from_raw_parts_mut(ptr, sz)
+        };
+
+        IoSliceMut::new(buf)
     }
 
     /// Get capacity of the buffer.
@@ -380,7 +401,7 @@ mod async_io {
         #[test]
         fn test_file_volatile_slice_with_size() {
             let mut buf = [0u8; 1024];
-            let mut buf2 = unsafe { FileVolatileBuf::with_size(&mut buf, 256) };
+            let mut buf2 = unsafe { FileVolatileBuf::new_with_data(&mut buf, 256) };
 
             assert_eq!(buf2.bytes_total(), 1024);
             assert_eq!(buf2.bytes_init(), 256);
@@ -395,7 +416,7 @@ mod async_io {
         #[test]
         fn test_file_volatile_slice_io_slice() {
             let mut buf = [0u8; 1024];
-            let buf2 = unsafe { FileVolatileBuf::with_size(&mut buf, 256) };
+            let buf2 = unsafe { FileVolatileBuf::new_with_data(&mut buf, 256) };
 
             let slice = buf2.io_slice_mut();
             assert_eq!(slice.len(), 768);
@@ -415,14 +436,14 @@ mod tests {
     #[test]
     fn test_new_file_volatile_slice() {
         let mut buffer = [0u8; 1024];
-        let s = unsafe { FileVolatileSlice::new(buffer.as_mut_ptr(), buffer.len()) };
+        let s = unsafe { FileVolatileSlice::from_raw_ptr(buffer.as_mut_ptr(), buffer.len()) };
 
         let o: u32 = s.load(0x10, Ordering::Acquire).unwrap();
         assert_eq!(o, 0);
         s.store(1u8, 0x10, Ordering::Release).unwrap();
 
         let s2 = s.as_volatile_slice();
-        let s3 = FileVolatileSlice::new_from_volatile_slice(&s2);
+        let s3 = FileVolatileSlice::from_volatile_slice(&s2);
         assert_eq!(s3.len(), 1024);
 
         assert!(s3.offset(2048).is_err());
