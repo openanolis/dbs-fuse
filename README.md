@@ -16,3 +16,6 @@ The `dbs-fuse` crate adds a wrapper layer over [tokio](https://tokio.rs/) and [t
 ## License
 
 This project is licensed under [Apache License](http://www.apache.org/licenses/LICENSE-2.0), Version 2.0.
+
+Source code under [src/tokio-uring] is temporarily copied from [tokio-uring](https://github.com/tokio-rs/tokio-uring)
+with modifications, which is licensed under [MIT](https://github.com/tokio-rs/tokio-uring/blob/master/LICENSE).
