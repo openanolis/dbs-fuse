@@ -355,6 +355,9 @@ impl FileVolatileBuf {
 }
 
 #[cfg(all(feature = "async-io", target_os = "linux"))]
+pub use crate::tokio_uring::buf::{IoBuf, IoBufMut, Slice};
+
+#[cfg(all(feature = "async-io", target_os = "linux"))]
 mod async_io {
     use super::*;
 
