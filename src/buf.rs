@@ -361,7 +361,7 @@ pub use crate::tokio_uring::buf::{IoBuf, IoBufMut, Slice};
 mod async_io {
     use super::*;
 
-    unsafe impl tokio_uring::buf::IoBuf for FileVolatileBuf {
+    unsafe impl crate::tokio_uring::buf::IoBuf for FileVolatileBuf {
         fn stable_ptr(&self) -> *const u8 {
             self.addr as *const u8
         }
@@ -375,7 +375,7 @@ mod async_io {
         }
     }
 
-    unsafe impl tokio_uring::buf::IoBufMut for FileVolatileBuf {
+    unsafe impl crate::tokio_uring::buf::IoBufMut for FileVolatileBuf {
         fn stable_mut_ptr(&mut self) -> *mut u8 {
             self.addr as *mut u8
         }
@@ -388,7 +388,7 @@ mod async_io {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use tokio_uring::buf::{IoBuf, IoBufMut};
+        use crate::tokio_uring::buf::{IoBuf, IoBufMut};
 
         #[test]
         fn test_new_file_volatile_buf() {

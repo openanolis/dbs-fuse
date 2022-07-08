@@ -86,7 +86,7 @@ pub mod buf;
 pub mod fs;
 pub mod net;
 
-pub use runtime::spawn;
+pub use runtime::{spawn, Runtime};
 
 use std::future::Future;
 

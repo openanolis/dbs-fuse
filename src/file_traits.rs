@@ -452,10 +452,10 @@ pub use async_io::AsyncFileReadWriteVolatile;
 
 #[cfg(all(target_os = "linux", feature = "async-io"))]
 mod async_io {
+    use crate::tokio_uring::buf::IoBuf;
+    use crate::tokio_uring::fs::File;
     use futures::join;
     use std::sync::Arc;
-    use tokio_uring::buf::IoBuf;
-    use tokio_uring::fs::File;
 
     use super::*;
     use crate::buf::FileVolatileBuf;
@@ -874,7 +874,7 @@ mod async_io {
             std::fs::write(&path, b"this is a test").unwrap();
 
             let mut buf = vec![0; 4096];
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice = unsafe { FileVolatileSlice::from_mut_slice(&mut buf) };
                 let vbuf = unsafe { vslice.borrow_as_buf(false) };
                 let file = File::open(&path).await.unwrap();
@@ -896,7 +896,7 @@ mod async_io {
             let mut buf1 = vec![0; 4];
             let mut buf2 = vec![0; 4];
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
@@ -915,7 +915,7 @@ mod async_io {
             let mut buf1 = vec![0; 1024];
             let mut buf2 = vec![0; 4];
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
@@ -933,7 +933,7 @@ mod async_io {
             assert_eq!(buf1[0], b' ');
             assert_eq!(buf1[9], b't');
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }];
@@ -942,14 +942,14 @@ mod async_io {
                 assert_eq!(res.unwrap(), 0);
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vbufs = vec![];
                 let file = File::open(&path).await.unwrap();
                 let (res, _vbufs) = file.async_read_vectored_at_volatile(vbufs, 0).await;
                 assert_eq!(res.unwrap(), 0);
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -985,7 +985,7 @@ mod async_io {
                 assert_eq!(buf1[6], b't');
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1011,7 +1011,7 @@ mod async_io {
                 assert_eq!(vbufs.len(), 6);
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1034,7 +1034,7 @@ mod async_io {
                 assert_eq!(vbufs.len(), 5);
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1054,7 +1054,7 @@ mod async_io {
                 assert_eq!(vbufs.len(), 4);
             });
 
-            tokio_uring::start(async {
+            crate::tokio_uring::start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
