@@ -48,7 +48,12 @@ impl File {
                 .create(create)
                 .open(path)
                 .await
-                .map(|v| File::Uring(v.as_raw_fd())),
+                .map(|v| {
+                    // Convert the tokio_uring::fs::File object into RawFd(): v.into_raw_fd().
+                    let file = File::Uring(v.as_raw_fd());
+                    std::mem::forget(v);
+                    file
+                }),
             _ => panic!("should not happen"),
         }
     }
