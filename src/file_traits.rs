@@ -452,13 +452,14 @@ pub use async_io::AsyncFileReadWriteVolatile;
 
 #[cfg(all(target_os = "linux", feature = "async-io"))]
 mod async_io {
-    use crate::tokio_uring::buf::IoBuf;
-    use crate::tokio_uring::fs::File;
-    use futures::join;
     use std::sync::Arc;
 
+    use futures::join;
+
     use super::*;
+    use crate::async_file::File;
     use crate::buf::FileVolatileBuf;
+    use crate::tokio_uring::buf::IoBuf;
 
     /// Extension of [FileReadWriteVolatile] to support io-uring based asynchronous IO.
     ///
@@ -515,7 +516,7 @@ mod async_io {
             buf: FileVolatileBuf,
             offset: u64,
         ) -> (Result<usize>, FileVolatileBuf) {
-            self.read_at(buf, offset).await
+            self.async_read_at(buf, offset).await
         }
 
         async fn async_read_vectored_at_volatile(
@@ -673,7 +674,7 @@ mod async_io {
             buf: FileVolatileBuf,
             offset: u64,
         ) -> (Result<usize>, FileVolatileBuf) {
-            self.write_at(buf, offset).await
+            self.async_write_at(buf, offset).await
         }
 
         async fn async_write_vectored_at_volatile(
@@ -865,8 +866,8 @@ mod async_io {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use crate::async_runtime::{start, Runtime};
         use crate::buf::FileVolatileSlice;
-        use crate::tokio_uring;
 
         #[test]
         fn io_uring_async_read_at_volatile() {
@@ -875,14 +876,13 @@ mod async_io {
             std::fs::write(&path, b"this is a test").unwrap();
 
             let mut buf = vec![0; 4096];
-            tokio_uring::start(async {
+            Runtime::new().block_on(async {
                 let vslice = unsafe { FileVolatileSlice::from_mut_slice(&mut buf) };
                 let vbuf = unsafe { vslice.borrow_as_buf(false) };
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbuf) = file.async_read_at_volatile(vbuf, 4).await;
                 assert_eq!(res.unwrap(), 10);
                 assert_eq!(vbuf.bytes_init(), 10);
-                file.close().await.unwrap();
             });
             assert_eq!(buf[0], b' ');
             assert_eq!(buf[9], b't');
@@ -897,7 +897,7 @@ mod async_io {
             let mut buf1 = vec![0; 4];
             let mut buf2 = vec![0; 4];
 
-            tokio_uring::start(async {
+            Runtime::new().block_on(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
@@ -905,7 +905,7 @@ mod async_io {
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
                     vslice2.borrow_as_buf(false)
                 }];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 8);
                 assert_eq!(vbufs.len(), 2);
@@ -916,7 +916,7 @@ mod async_io {
             let mut buf1 = vec![0; 1024];
             let mut buf2 = vec![0; 4];
 
-            tokio_uring::start(async {
+            Runtime::new().block_on(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
@@ -924,7 +924,7 @@ mod async_io {
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }, unsafe {
                     vslice2.borrow_as_buf(false)
                 }];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 10);
                 assert_eq!(vbufs.len(), 2);
@@ -934,23 +934,23 @@ mod async_io {
             assert_eq!(buf1[0], b' ');
             assert_eq!(buf1[9], b't');
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vbufs = vec![unsafe { vslice1.borrow_as_buf(false) }];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, _vbufs) = file.async_read_vectored_at_volatile(vbufs, 14).await;
                 assert_eq!(res.unwrap(), 0);
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vbufs = vec![];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, _vbufs) = file.async_read_vectored_at_volatile(vbufs, 0).await;
                 assert_eq!(res.unwrap(), 0);
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -973,7 +973,7 @@ mod async_io {
                     unsafe { vslice6.borrow_as_buf(false) },
                     unsafe { vslice7.borrow_as_buf(false) },
                 ];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 7);
                 assert_eq!(vbufs.len(), 7);
@@ -986,7 +986,7 @@ mod async_io {
                 assert_eq!(buf1[6], b't');
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1006,13 +1006,13 @@ mod async_io {
                     unsafe { vslice5.borrow_as_buf(false) },
                     unsafe { vslice6.borrow_as_buf(false) },
                 ];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 6);
                 assert_eq!(vbufs.len(), 6);
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1029,13 +1029,13 @@ mod async_io {
                     unsafe { vslice4.borrow_as_buf(false) },
                     unsafe { vslice5.borrow_as_buf(false) },
                 ];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 5);
                 assert_eq!(vbufs.len(), 5);
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1049,13 +1049,13 @@ mod async_io {
                     unsafe { vslice3.borrow_as_buf(false) },
                     unsafe { vslice4.borrow_as_buf(false) },
                 ];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 4);
                 assert_eq!(vbufs.len(), 4);
             });
 
-            tokio_uring::start(async {
+            start(async {
                 let vslice1 = unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), 1) };
                 let vslice2 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr().add(1), 1) };
@@ -1066,7 +1066,7 @@ mod async_io {
                     unsafe { vslice2.borrow_as_buf(false) },
                     unsafe { vslice3.borrow_as_buf(false) },
                 ];
-                let file = File::open(&path).await.unwrap();
+                let file = File::async_open(&path, false, false).await.unwrap();
                 let (res, vbufs) = file.async_read_vectored_at_volatile(vbufs, 4).await;
                 assert_eq!(res.unwrap(), 3);
                 assert_eq!(vbufs.len(), 3);

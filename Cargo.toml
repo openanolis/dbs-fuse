@@ -32,7 +32,7 @@ scoped-tls = "1.0.0"
 slab = "0.4.6"
 
 [features]
-async-io = ["async-trait", "futures", "tokio/fs", "tokio/net", "tokio/sync"]
+async-io = ["async-trait", "futures", "tokio/fs", "tokio/net", "tokio/sync", "tokio/rt"]
 
 [package.metadata.docs.rs]
 all-features = true

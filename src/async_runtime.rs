@@ -52,6 +52,11 @@ impl Runtime {
     }
 }
 
+/// Start an async runtime.
+pub fn start<F: Future>(future: F) -> F::Output {
+    Runtime::new().block_on(future)
+}
+
 impl Default for Runtime {
     fn default() -> Self {
         Runtime::new()
