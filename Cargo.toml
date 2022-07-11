@@ -22,10 +22,9 @@ vmm-sys-util = "0.9.0"
 tokio = { version = "1", features = ["macros"] }
 tokio-test = "0.4.2"
 
-[target.'cfg(linux)'.dev-dependencies]
-tokio-uring = "0.3.0"
-
 [target.'cfg(target_os = "linux")'.dependencies]
+tokio-uring = "0.3.0"
+#tokio-uring = { git = "https://github.com/jiangliu/tokio-uring.git", branch = "dbs-fuse" }
 io-uring = { version = "0.5.2", features = ["unstable"] }
 socket2 = { version = "0.4.4", features = ["all"] }
 scoped-tls = "1.0.0"
