@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+//! `File` to wrap over `tokio::fs::File` and `tokio-uring::fs::File`.
+
 use std::fmt::{Debug, Formatter};
 use std::io::{ErrorKind, IoSlice, IoSliceMut};
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};

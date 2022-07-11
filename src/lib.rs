@@ -2,25 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
 
-//! A utility crate to support [fuse-backend-rs](https://github.com/cloud-hypervisor/fuse-backend-rs)
+//! A utility crate to support [fuse-backend-rs](https://github.com/cloud-hypervisor/fuse-backend-rs) and [Nydus Image Service](https://github.com/dragonflyoss/image-service).
 //!
 //! ### Wrappers for Rust async io
 //! It's challenging to support Rust async io, and it's even more challenging to support Rust async io with Linux io-uring.
 //!
-//! The `dbs-fuse` crate adds a wrapper layer over [tokio] and [tokio-uring] to simplify the way to support Rust async io by providing:
-//! - [FileReadWriteVolatile]: A trait similar to `Read` and `Write`, but uses [FileVolatileSlice] objects as data buffers.
-//! - [FileVolatileSlice]: An adapter structure to work around limitations of the `vm-memory` crate.
-//! - [FileVolatileBuf]: An adapter structure to support `io-uring` based asynchronous IO.
-//! - [File]: An adapter for for [tokio::fs::File] and [tokio-uring::fs::File].
-//! - [Runtime]: An adapter for for [tokio::runtime::Runtime] and [tokio-uring::Runtime].
-//!
-//! [FileReadWriteVolatile]: crate::file_traits::FileReadWriteVolatile
-//! [FileVolatileSlice]: crate::buf::FileVolatileSlice
-//! [FileVolatileBuf]: crate::buf::FileVolatileBuf
-//! [File]: crate::async_file::File
-//! [Runtime]: crate::async_runtime::Runtime
-//! [tokio]: https://tokio.rs/
-//! [tokio-uring]: https://github.com/tokio-rs/tokio-uring
+//! The `dbs-fuse` crate adds a wrapper layer over [tokio](https://github.com/tokio-rs/tokio) and [tokio-uring](https://github.com/tokio-rs/tokio-uring) to simplify the way to support Rust async io by providing:
+//! - [FileReadWriteVolatile](https://github.com/dragonflyoss/image-service): A trait similar to [std::io::Read] and [std::io::Write], but uses [FileVolatileSlice](https://github.com/dragonflyoss/image-service) objects as data buffers.
+//! - [FileVolatileSlice](crate::buf::FileVolatileSlice): An adapter structure to work around limitations of the [vm-memory](https://github.com/rust-vmm/vm-memory) crate.
+//! - [FileVolatileBuf](crate::buf::FileVolatileBuf): An adapter structure to support [io-uring](https://github.com/tokio-rs/io-uring) based asynchronous IO.
+//! - [File](crate::async_file::File): An adapter for for [tokio::fs::File] and [tokio-uring::fs::File].
+//! - [Runtime](crate::async_runtime::Runtime): An adapter for for [tokio::runtime::Runtime] and [tokio-uring::Runtime].
 
 pub mod buf;
 pub mod file_traits;
@@ -35,13 +27,17 @@ pub mod mpmc;
 // Temporarily include all source code tokio-uring.
 // Will switch to upstream once our enhancement have been merged and new version available.
 #[cfg(all(feature = "async-io", target_os = "linux"))]
+#[doc(hidden)]
 pub mod tokio_uring;
 #[cfg(all(feature = "async-io", target_os = "linux"))]
+#[doc(hidden)]
 use self::tokio_uring::{driver, fs, future, BufResult};
 
 #[cfg(target_os = "linux")]
+#[doc(hidden)]
 pub use libc::{off64_t, pread64, preadv64, pwrite64, pwritev64};
 #[cfg(target_os = "macos")]
+#[doc(hidden)]
 pub use libc::{
     off_t as off64_t, pread as pread64, preadv as preadv64, pwrite as pwrite64,
     pwritev as pwritev64,
