@@ -105,7 +105,7 @@ impl UdpSocket {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignored
     /// use socket2::{Protocol, Socket, Type};
     /// use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
     /// use tokio_uring::net::UdpSocket;

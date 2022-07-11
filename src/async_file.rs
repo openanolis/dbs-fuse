@@ -9,6 +9,8 @@ use std::path::Path;
 
 use crate::async_runtime::{Runtime, CURRENT_RUNTIME};
 use crate::buf::FileVolatileBuf;
+#[cfg(target_os = "linux")]
+use crate::tokio_uring;
 use crate::{off64_t, preadv64, pwritev64};
 
 /// An adapter enum to support both tokio and tokio-uring asynchronous `File`.
@@ -42,7 +44,7 @@ impl File {
                 .await
                 .map(File::Tokio),
             #[cfg(target_os = "linux")]
-            2 => crate::tokio_uring::fs::OpenOptions::new()
+            2 => tokio_uring::fs::OpenOptions::new()
                 .read(true)
                 .write(write)
                 .create(create)
@@ -77,7 +79,7 @@ impl File {
                 // Safety: we rely on tokio_uring::fs::File internal implementation details.
                 // It should be implemented as self.async_try_clone().await.unwrap().read_at,
                 // but that causes two more syscalls.
-                let file = unsafe { crate::tokio_uring::fs::File::from_raw_fd(*fd) };
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
                 let res = file.read_at(buf, offset).await;
                 std::mem::forget(file);
                 res
@@ -103,7 +105,7 @@ impl File {
                 // Safety: we rely on tokio_uring::fs::File internal implementation details.
                 // It should be implemented as self.async_try_clone().await.unwrap().readv_at,
                 // but that causes two more syscalls.
-                let file = unsafe { crate::tokio_uring::fs::File::from_raw_fd(*fd) };
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
                 let res = file.readv_at(bufs, offset).await;
                 std::mem::forget(file);
                 res
@@ -130,7 +132,7 @@ impl File {
                 // Safety: we rely on tokio_uring::fs::File internal implementation details.
                 // It should be implemented as self.async_try_clone().await.unwrap().write_at,
                 // but that causes two more syscalls.
-                let file = unsafe { crate::tokio_uring::fs::File::from_raw_fd(*fd) };
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
                 let res = file.write_at(buf, offset).await;
                 std::mem::forget(file);
                 res
@@ -156,7 +158,7 @@ impl File {
                 // Safety: we rely on tokio_uring::fs::File internal implementation details.
                 // It should be implemented as self.async_try_clone().await.unwrap().writev_at,
                 // but that causes two more syscalls.
-                let file = unsafe { crate::tokio_uring::fs::File::from_raw_fd(*fd) };
+                let file = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
                 let res = file.writev_at(bufs, offset).await;
                 std::mem::forget(file);
                 res
@@ -212,7 +214,7 @@ impl Drop for File {
     fn drop(&mut self) {
         #[cfg(target_os = "linux")]
         if let File::Uring(fd) = self {
-            let _ = unsafe { crate::tokio_uring::fs::File::from_raw_fd(*fd) };
+            let _ = unsafe { tokio_uring::fs::File::from_raw_fd(*fd) };
         }
     }
 }
