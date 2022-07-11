@@ -866,7 +866,7 @@ mod async_io {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::async_runtime::{start, Runtime};
+        use crate::async_runtime::{block_on, start};
         use crate::buf::FileVolatileSlice;
 
         #[test]
@@ -876,7 +876,7 @@ mod async_io {
             std::fs::write(&path, b"this is a test").unwrap();
 
             let mut buf = vec![0; 4096];
-            Runtime::new().block_on(async {
+            block_on(async {
                 let vslice = unsafe { FileVolatileSlice::from_mut_slice(&mut buf) };
                 let vbuf = unsafe { vslice.borrow_as_buf(false) };
                 let file = File::async_open(&path, false, false).await.unwrap();
@@ -897,7 +897,7 @@ mod async_io {
             let mut buf1 = vec![0; 4];
             let mut buf2 = vec![0; 4];
 
-            Runtime::new().block_on(async {
+            block_on(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
@@ -916,7 +916,7 @@ mod async_io {
             let mut buf1 = vec![0; 1024];
             let mut buf2 = vec![0; 4];
 
-            Runtime::new().block_on(async {
+            block_on(async {
                 let vslice1 =
                     unsafe { FileVolatileSlice::from_raw_ptr(buf1.as_mut_ptr(), buf1.len()) };
                 let vslice2 =
